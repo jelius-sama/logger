@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
+func init() {
+	Configure("ENV", "dev")
+}
+
 func TestSetStyle(t *testing.T) {
 	// Capture stdout to suppress output during tests
 	oldStdout := os.Stdout

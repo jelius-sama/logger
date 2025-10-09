@@ -17,10 +17,25 @@ import (
 	"time"
 )
 
-// LoggerStyle defines the current output format style.
-// Valid values are "brackets" for [LEVEL] format and "colon" for LEVEL: format.
-// Defaults to "brackets" style.
-var LoggerStyle string = "brackets"
+var (
+	// LoggerStyle defines the current output format style.
+	// Valid values are "brackets" for [LEVEL] format and "colon" for LEVEL: format.
+	// Defaults to "brackets" style.
+	LoggerStyle string = "brackets"
+
+	isDebugMode *bool
+)
+
+// Configure sets up debug mode detection (call once at startup)
+func Configure(envVar, devValue string) {
+	enabled := os.Getenv(envVar) == devValue
+	isDebugMode = &enabled
+
+	if enabled {
+		Info("DEBUG MODE ENABLED")
+		Error("If you see this in production, STOP immediately!")
+	}
+}
 
 // SetStyle changes the logger output format style.
 // Accepts "brackets" for [LEVEL] format or "colon" for LEVEL: format.
@@ -90,7 +105,15 @@ func Error(a ...any) {
 //	Debug("Processing user request")
 //	Debug("Variable value:", someVar)
 func Debug(a ...any) {
-	fmt.Println(append(append([]any{applyStyle("\n\033[34m%s", "DEBUG")}, a...), []any{"\033[0m"}...)...)
+	// INFO: Only if we are in dev mode we print the debug logs.
+	if isDebugMode == nil {
+		Error("Debug not configured! Call Configure() before using Debug()")
+		return
+	}
+
+	if *isDebugMode {
+		fmt.Println(append(append([]any{applyStyle("\n\033[34m%s", "DEBUG")}, a...), []any{"\033[0m"}...)...)
+	}
 }
 
 // Fatal logs a fatal error message to stderr with red coloring and immediately

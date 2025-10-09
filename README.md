@@ -307,6 +307,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - No external dependencies beyond Go standard library
 
 ## Changelog
+### v1.0.1
+- Added a `Configure` function to configure current environment (`dev` VS `prod`).
+- Debug logs only gets logged during `dev` mode.
 
 ### v1.0.0
 - Initial release
