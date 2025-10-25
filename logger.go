@@ -194,7 +194,7 @@ func Warning(a ...any) {
 //	TimedError("Connection timeout")
 //	// Output: [ERROR] 2006/01/02 15:04:05 Connection timeout
 func TimedError(a ...any) {
-	Error(append([]any{time.Now().Format("2006/01/02 15:04:05")}, a...)...)
+	Error(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
 
 // TimedDebug logs a debug message with a timestamp prefix.
@@ -206,7 +206,7 @@ func TimedError(a ...any) {
 //	TimedDebug("Cache miss for key:", key)
 //	// Output: [DEBUG] 2006/01/02 15:04:05 Cache miss for key: user123
 func TimedDebug(a ...any) {
-	Debug(append([]any{time.Now().Format("2006/01/02 15:04:05")}, a...)...)
+	Debug(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
 
 // TimedFatal logs a fatal error message with a timestamp prefix and exits.
@@ -218,7 +218,7 @@ func TimedDebug(a ...any) {
 //	TimedFatal("System corruption detected")
 //	// Output: [FATAL] 2006/01/02 15:04:05 System corruption detected
 func TimedFatal(a ...any) {
-	Fatal(append([]any{time.Now().Format("2006/01/02 15:04:05")}, a...)...)
+	Fatal(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
 
 // TimedPanic logs a panic message with a timestamp prefix and triggers panic.
@@ -230,7 +230,7 @@ func TimedFatal(a ...any) {
 //	TimedPanic("Critical state reached")
 //	// Output: [PANIC] 2006/01/02 15:04:05 Critical state reached
 func TimedPanic(a ...any) {
-	Panic(append([]any{time.Now().Format("2006/01/02 15:04:05")}, a...)...)
+	Panic(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
 
 // TimedInfo logs an informational message with a timestamp prefix.
@@ -242,7 +242,7 @@ func TimedPanic(a ...any) {
 //	TimedInfo("User login successful")
 //	// Output: [INFO] 2006/01/02 15:04:05 User login successful
 func TimedInfo(a ...any) {
-	Info(append([]any{time.Now().Format("2006/01/02 15:04:05")}, a...)...)
+	Info(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
 
 // TimedOkay logs a success message with a timestamp prefix.
@@ -254,7 +254,7 @@ func TimedInfo(a ...any) {
 //	TimedOkay("Backup completed")
 //	// Output: [OK] 2006/01/02 15:04:05 Backup completed
 func TimedOkay(a ...any) {
-	Okay(append([]any{time.Now().Format("2006/01/02 15:04:05")}, a...)...)
+	Okay(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
 
 // TimedWarning logs a warning message with a timestamp prefix.
@@ -266,5 +266,5 @@ func TimedOkay(a ...any) {
 //	TimedWarning("Disk space low")
 //	// Output: [WARN] 2006/01/02 15:04:05 Disk space low
 func TimedWarning(a ...any) {
-	Warning(append([]any{time.Now().Format("2006/01/02 15:04:05")}, a...)...)
+	Warning(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
