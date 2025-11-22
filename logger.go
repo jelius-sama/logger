@@ -43,18 +43,18 @@ type Cnf struct {
 }
 
 func Configure(c Cnf) {
+	useSyslog = BoolPtr(c.UseSyslog)
+
 	if c.IsDev.DirectValue != nil {
 		isDebugMode = c.IsDev.DirectValue
 		return
 	}
 
-	if c.EnvironmentVariable == nil || c.DirectValue == nil {
+	if c.EnvironmentVariable == nil || c.ExpectedValue == nil {
 		fmt.Fprintln(os.Stderr, "invalid configure call signature")
 		os.Exit(1)
 		return
 	}
-
-	useSyslog = BoolPtr(c.UseSyslog)
 
 	enabled := os.Getenv(*c.IsDev.EnvironmentVariable) == *c.ExpectedValue
 	isDebugMode = &enabled
