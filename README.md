@@ -307,6 +307,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - No external dependencies beyond Go standard library
 
 ## Changelog
+### v1.4.4
+Major bug fixes in `Configure` function.
+
 ### v1.4.0
 - Breaking changes:
     - `Configure` takes a structure `Cnf` for clear structure.
