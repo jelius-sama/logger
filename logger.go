@@ -56,7 +56,7 @@ func enableProdMode(shouldUseSyslog bool) {
 }
 
 func Configure(c Cnf) {
-	if c.IsDev.DirectValue != nil || *c.IsDev.DirectValue == true {
+	if c.IsDev.DirectValue != nil && *c.IsDev.DirectValue == true {
 		enableDebugMode()
 		return
 	}
