@@ -12,8 +12,8 @@ package logger
 
 import (
 	"fmt"
+	"log/syslog"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -25,21 +25,60 @@ var (
 	LoggerStyle string = "brackets"
 
 	isDebugMode *bool
+	useSyslog   *bool
 )
 
 // Configure sets up debug mode detection (call once at startup)
-func Configure(envVar, devValue string, directVal *bool) {
-	if directVal != nil {
-		isDebugMode = directVal
+// NOTE: Configure is expected to be called at least once before using any of the logging functions
+type IsDev struct {
+	EnvironmentVariable *string
+	// Environment variables are usually strings
+	ExpectedValue *string
+	DirectValue   *bool
+}
+
+type Cnf struct {
+	IsDev
+	UseSyslog bool
+}
+
+func Configure(c Cnf) {
+	if c.IsDev.DirectValue != nil {
+		isDebugMode = c.IsDev.DirectValue
 		return
 	}
 
-	enabled := os.Getenv(envVar) == devValue
+	if c.EnvironmentVariable == nil || c.DirectValue == nil {
+		fmt.Fprintln(os.Stderr, "invalid configure call signature")
+		os.Exit(1)
+		return
+	}
+
+	useSyslog = BoolPtr(c.UseSyslog)
+
+	enabled := os.Getenv(*c.IsDev.EnvironmentVariable) == *c.ExpectedValue
 	isDebugMode = &enabled
 
 	if enabled {
 		Info("DEBUG MODE ENABLED")
 		Error("If you see this in production, STOP immediately!")
+	}
+}
+
+func SyslogStyled(pri syslog.Priority, stylePrefix string, a ...any) {
+	w, err := syslog.New(pri|syslog.LOG_USER, "")
+	if err != nil {
+		return
+	}
+
+	_, err = w.Write([]byte(fmt.Sprintln(append([]any{applyStyle(nil, stylePrefix)}, a...)...)))
+	if err != nil {
+		fmt.Fprintln(os.Stderr,
+			append(
+				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "ERROR")}, "error writing to syslog"),
+				"\033[0m",
+			)...,
+		)
 	}
 }
 
@@ -122,17 +161,16 @@ func BoolPtr(s bool) *bool {
 //
 //	Error("Database connection failed")
 //	Error("Invalid input:", userInput, "expected number")
-
 func Error(a ...any) {
-	if *isDebugMode {
+	if *useSyslog {
+		SyslogStyled(syslog.LOG_ERR, "ERROR", a...)
+	} else {
 		fmt.Fprintln(os.Stderr,
 			append(
 				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "ERROR")}, a...),
-				[]any{"\033[0m"}...)...)
-	} else {
-		exec.Command("logger", "-p", "user.err",
-			fmt.Sprintln(append(append([]any{applyStyle(nil, "ERROR")}, a...))...),
-		).Run()
+				"\033[0m",
+			)...,
+		)
 	}
 }
 
@@ -146,14 +184,16 @@ func Error(a ...any) {
 //	Debug("Variable value:", someVar)
 func Debug(a ...any) {
 	if *isDebugMode {
-		fmt.Println(
-			append(
-				append([]any{applyStyle(StringPtr("\n\033[34m%s"), "DEBUG")}, a...),
-				[]any{"\033[0m"}...)...)
-	} else {
-		exec.Command("logger", "-p", "user.debug",
-			fmt.Sprintln(append(append([]any{applyStyle(nil, "DEBUG")}, a...))...),
-		).Run()
+		if *useSyslog {
+			SyslogStyled(syslog.LOG_DEBUG, "DEBUG", a...)
+		} else {
+			fmt.Println(
+				append(
+					append([]any{applyStyle(StringPtr("\n\033[34m%s"), "DEBUG")}, a...),
+					"\033[0m",
+				)...,
+			)
+		}
 	}
 }
 
@@ -165,20 +205,17 @@ func Debug(a ...any) {
 // Example:
 //
 //	Fatal("Critical system failure - cannot continue")
-
 func Fatal(a ...any) {
-	if *isDebugMode {
+	if *useSyslog {
+		SyslogStyled(syslog.LOG_EMERG, "FATAL", a...)
+		os.Exit(-1)
+	} else {
 		fmt.Fprintln(os.Stderr,
 			append(
 				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "FATAL")}, a...),
-				[]any{"\033[0m"}...)...)
-		os.Exit(-1)
-	} else {
-		exec.Command(
-			"logger",
-			"-p", "user.emerg",
-			fmt.Sprintln(append(append([]any{applyStyle(nil, "FATAL")}, a...))...),
-		).Run()
+				"\033[0m",
+			)...,
+		)
 		os.Exit(-1)
 	}
 }
@@ -196,19 +233,16 @@ func Fatal(a ...any) {
 //	defer cleanup()
 //	Panic("Something went wrong")  // cleanup() will run
 func Panic(a ...any) {
-	if *isDebugMode {
+	if *useSyslog {
 		fmt.Fprintln(os.Stderr,
 			append(
 				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "PANIC")}, a...),
-				[]any{"\033[0m"}...)...)
+				"\033[0m",
+			)...,
+		)
 		panic(strings.TrimSuffix(fmt.Sprintln(a...), "\n"))
 	} else {
-		exec.Command(
-			"logger",
-			"-p", "user.alert",
-			fmt.Sprintln(append(append([]any{applyStyle(nil, "PANIC")}, a...))...),
-		).Run()
-
+		SyslogStyled(syslog.LOG_ALERT, "PANIC", a...)
 		panic(strings.TrimSuffix(fmt.Sprintln(a...), "\n"))
 	}
 }
@@ -222,15 +256,15 @@ func Panic(a ...any) {
 //	Info("Application started successfully")
 //	Info("Processing", itemCount, "items")
 func Info(a ...any) {
-	if *isDebugMode {
+	if *useSyslog {
 		fmt.Println(
 			append(
 				append([]any{applyStyle(StringPtr("\n\033[0;36m%s"), "INFO")}, a...),
-				[]any{"\033[0m"}...)...)
+				"\033[0m",
+			)...,
+		)
 	} else {
-		exec.Command("logger", "-p", "user.info",
-			fmt.Sprintln(append(append([]any{applyStyle(nil, "INFO")}, a...))...),
-		).Run()
+		SyslogStyled(syslog.LOG_INFO, "INFO", a...)
 	}
 }
 
@@ -243,15 +277,15 @@ func Info(a ...any) {
 //	Okay("Database connection established")
 //	Okay("File saved successfully")
 func Okay(a ...any) {
-	if *isDebugMode {
+	if *useSyslog {
 		fmt.Println(
 			append(
 				append([]any{applyStyle(StringPtr("\n\033[32m%s"), "OK")}, a...),
-				[]any{"\033[0m"}...)...)
+				"\033[0m",
+			)...,
+		)
 	} else {
-		exec.Command("logger", "-p", "user.notice",
-			fmt.Sprintln(append(append([]any{applyStyle(nil, "OK")}, a...))...),
-		).Run()
+		SyslogStyled(syslog.LOG_NOTICE, "OK", a...)
 	}
 }
 
@@ -264,15 +298,15 @@ func Okay(a ...any) {
 //	Warning("Configuration file not found, using defaults")
 //	Warning("API rate limit approaching")
 func Warning(a ...any) {
-	if *isDebugMode {
+	if *useSyslog {
 		fmt.Println(
 			append(
 				append([]any{applyStyle(StringPtr("\n\033[33m%s"), "WARN")}, a...),
-				[]any{"\033[0m"}...)...)
+				"\033[0m",
+			)...,
+		)
 	} else {
-		exec.Command("logger", "-p", "user.warn",
-			fmt.Sprintln(append(append([]any{applyStyle(nil, "WARN")}, a...))...),
-		).Run()
+		SyslogStyled(syslog.LOG_WARNING, "WARN", a...)
 	}
 }
 
