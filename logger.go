@@ -13,6 +13,7 @@ package logger
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 )
@@ -27,7 +28,12 @@ var (
 )
 
 // Configure sets up debug mode detection (call once at startup)
-func Configure(envVar, devValue string) {
+func Configure(envVar, devValue string, directVal *bool) {
+	if directVal != nil {
+		isDebugMode = directVal
+		return
+	}
+
 	enabled := os.Getenv(envVar) == devValue
 	isDebugMode = &enabled
 
@@ -69,18 +75,42 @@ func SetStyle(s string) {
 // This is an internal helper function that wraps labels with brackets or colons.
 // It takes a format string and a label, returning the formatted result.
 // Falls back to brackets format if an invalid LoggerStyle is encountered.
-func applyStyle(format string, label string) string {
-	switch LoggerStyle {
-	case "brackets":
-		return fmt.Sprintf(format, "["+label+"]")
+func applyStyle(format *string, label string) string {
+	if format != nil {
+		switch LoggerStyle {
+		case "brackets":
+			return fmt.Sprintf(*format, "["+label+"]")
 
-	case "colon":
-		return fmt.Sprintf(format, label+":")
+		case "colon":
+			return fmt.Sprintf(*format, label+":")
 
-	default:
-		Error("Unreachable code reached!")
-		return fmt.Sprintf(format, "["+label+"]")
+		default:
+			Error("Unreachable code reached!")
+			return fmt.Sprintf(*format, "["+label+"]")
+		}
+	} else {
+		switch LoggerStyle {
+		case "brackets":
+			return fmt.Sprintf("[" + label + "]")
+
+		case "colon":
+			return fmt.Sprintf(label + ":")
+
+		default:
+			Error("Unreachable code reached!")
+			return fmt.Sprintf("[" + label + "]")
+		}
 	}
+}
+
+// StringPtr takes a string and returns a pointer to it.
+func StringPtr(s string) *string {
+	return &s
+}
+
+// BoolPtr takes a bool and returns a pointer to it.
+func BoolPtr(s bool) *bool {
+	return &s
 }
 
 // Error logs an error message to stderr with red coloring.
@@ -92,8 +122,18 @@ func applyStyle(format string, label string) string {
 //
 //	Error("Database connection failed")
 //	Error("Invalid input:", userInput, "expected number")
+
 func Error(a ...any) {
-	fmt.Fprintln(os.Stderr, append(append([]any{applyStyle("\n\033[31m%s", "ERROR")}, a...), []any{"\033[0m"}...)...)
+	if *isDebugMode {
+		fmt.Fprintln(os.Stderr,
+			append(
+				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "ERROR")}, a...),
+				[]any{"\033[0m"}...)...)
+	} else {
+		exec.Command("logger", "-p", "user.err",
+			fmt.Sprintln(append(append([]any{applyStyle(nil, "ERROR")}, a...))...),
+		).Run()
+	}
 }
 
 // Debug logs a debug message to stdout with blue coloring.
@@ -105,14 +145,15 @@ func Error(a ...any) {
 //	Debug("Processing user request")
 //	Debug("Variable value:", someVar)
 func Debug(a ...any) {
-	// INFO: Only if we are in dev mode we print the debug logs.
-	if isDebugMode == nil {
-		Error("Debug not configured! Call Configure() before using Debug()")
-		return
-	}
-
 	if *isDebugMode {
-		fmt.Println(append(append([]any{applyStyle("\n\033[34m%s", "DEBUG")}, a...), []any{"\033[0m"}...)...)
+		fmt.Println(
+			append(
+				append([]any{applyStyle(StringPtr("\n\033[34m%s"), "DEBUG")}, a...),
+				[]any{"\033[0m"}...)...)
+	} else {
+		exec.Command("logger", "-p", "user.debug",
+			fmt.Sprintln(append(append([]any{applyStyle(nil, "DEBUG")}, a...))...),
+		).Run()
 	}
 }
 
@@ -124,9 +165,22 @@ func Debug(a ...any) {
 // Example:
 //
 //	Fatal("Critical system failure - cannot continue")
+
 func Fatal(a ...any) {
-	fmt.Fprintln(os.Stderr, append(append([]any{applyStyle("\n\033[31m%s", "FATAL")}, a...), []any{"\033[0m"}...)...)
-	os.Exit(-1)
+	if *isDebugMode {
+		fmt.Fprintln(os.Stderr,
+			append(
+				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "FATAL")}, a...),
+				[]any{"\033[0m"}...)...)
+		os.Exit(-1)
+	} else {
+		exec.Command(
+			"logger",
+			"-p", "user.emerg",
+			fmt.Sprintln(append(append([]any{applyStyle(nil, "FATAL")}, a...))...),
+		).Run()
+		os.Exit(-1)
+	}
 }
 
 // Panic logs a panic message to stderr with red coloring and triggers a panic.
@@ -142,11 +196,21 @@ func Fatal(a ...any) {
 //	defer cleanup()
 //	Panic("Something went wrong")  // cleanup() will run
 func Panic(a ...any) {
-	// Print the formatted panic message to stderr first
-	fmt.Fprintln(os.Stderr, append(append([]any{applyStyle("\n\033[31m%s", "PANIC")}, a...), []any{"\033[0m"}...)...)
+	if *isDebugMode {
+		fmt.Fprintln(os.Stderr,
+			append(
+				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "PANIC")}, a...),
+				[]any{"\033[0m"}...)...)
+		panic(strings.TrimSuffix(fmt.Sprintln(a...), "\n"))
+	} else {
+		exec.Command(
+			"logger",
+			"-p", "user.alert",
+			fmt.Sprintln(append(append([]any{applyStyle(nil, "PANIC")}, a...))...),
+		).Run()
 
-	// Create panic message and trigger panic
-	panic(strings.TrimSuffix(fmt.Sprintln(a...), "\n"))
+		panic(strings.TrimSuffix(fmt.Sprintln(a...), "\n"))
+	}
 }
 
 // Info logs an informational message to stdout with cyan coloring.
@@ -158,7 +222,16 @@ func Panic(a ...any) {
 //	Info("Application started successfully")
 //	Info("Processing", itemCount, "items")
 func Info(a ...any) {
-	fmt.Println(append(append([]any{applyStyle("\n\033[0;36m%s", "INFO")}, a...), []any{"\033[0m"}...)...)
+	if *isDebugMode {
+		fmt.Println(
+			append(
+				append([]any{applyStyle(StringPtr("\n\033[0;36m%s"), "INFO")}, a...),
+				[]any{"\033[0m"}...)...)
+	} else {
+		exec.Command("logger", "-p", "user.info",
+			fmt.Sprintln(append(append([]any{applyStyle(nil, "INFO")}, a...))...),
+		).Run()
+	}
 }
 
 // Okay logs a success message to stdout with green coloring.
@@ -170,7 +243,16 @@ func Info(a ...any) {
 //	Okay("Database connection established")
 //	Okay("File saved successfully")
 func Okay(a ...any) {
-	fmt.Println(append(append([]any{applyStyle("\n\033[32m%s", "OK")}, a...), []any{"\033[0m"}...)...)
+	if *isDebugMode {
+		fmt.Println(
+			append(
+				append([]any{applyStyle(StringPtr("\n\033[32m%s"), "OK")}, a...),
+				[]any{"\033[0m"}...)...)
+	} else {
+		exec.Command("logger", "-p", "user.notice",
+			fmt.Sprintln(append(append([]any{applyStyle(nil, "OK")}, a...))...),
+		).Run()
+	}
 }
 
 // Warning logs a warning message to stdout with yellow coloring.
@@ -182,7 +264,16 @@ func Okay(a ...any) {
 //	Warning("Configuration file not found, using defaults")
 //	Warning("API rate limit approaching")
 func Warning(a ...any) {
-	fmt.Println(append(append([]any{applyStyle("\n\033[33m%s", "WARN")}, a...), []any{"\033[0m"}...)...)
+	if *isDebugMode {
+		fmt.Println(
+			append(
+				append([]any{applyStyle(StringPtr("\n\033[33m%s"), "WARN")}, a...),
+				[]any{"\033[0m"}...)...)
+	} else {
+		exec.Command("logger", "-p", "user.warn",
+			fmt.Sprintln(append(append([]any{applyStyle(nil, "WARN")}, a...))...),
+		).Run()
+	}
 }
 
 // TimedError logs an error message with a timestamp prefix.
