@@ -28,7 +28,12 @@ var (
 )
 
 // Configure sets up debug mode detection (call once at startup)
-func Configure(envVar, devValue string) {
+func Configure(envVar, devValue string, directVal *bool) {
+	if directVal != nil {
+		isDebugMode = directVal
+		return
+	}
+
 	enabled := os.Getenv(envVar) == devValue
 	isDebugMode = &enabled
 
@@ -98,9 +103,13 @@ func applyStyle(format *string, label string) string {
 	}
 }
 
-// addr_of takes a string and returns a pointer to it.
-// Passing nil to applyStyle is allowed, so this helper is needed.
-func addr_of(s string) *string {
+// StringPtr takes a string and returns a pointer to it.
+func StringPtr(s string) *string {
+	return &s
+}
+
+// BoolPtr takes a bool and returns a pointer to it.
+func BoolPtr(s bool) *bool {
 	return &s
 }
 
@@ -118,7 +127,7 @@ func Error(a ...any) {
 	if *isDebugMode {
 		fmt.Fprintln(os.Stderr,
 			append(
-				append([]any{applyStyle(addr_of("\n\033[31m%s"), "ERROR")}, a...),
+				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "ERROR")}, a...),
 				[]any{"\033[0m"}...)...)
 	} else {
 		exec.Command("logger", "-p", "user.err",
@@ -139,7 +148,7 @@ func Debug(a ...any) {
 	if *isDebugMode {
 		fmt.Println(
 			append(
-				append([]any{applyStyle(addr_of("\n\033[34m%s"), "DEBUG")}, a...),
+				append([]any{applyStyle(StringPtr("\n\033[34m%s"), "DEBUG")}, a...),
 				[]any{"\033[0m"}...)...)
 	} else {
 		exec.Command("logger", "-p", "user.debug",
@@ -161,7 +170,7 @@ func Fatal(a ...any) {
 	if *isDebugMode {
 		fmt.Fprintln(os.Stderr,
 			append(
-				append([]any{applyStyle(addr_of("\n\033[31m%s"), "FATAL")}, a...),
+				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "FATAL")}, a...),
 				[]any{"\033[0m"}...)...)
 		os.Exit(-1)
 	} else {
@@ -190,7 +199,7 @@ func Panic(a ...any) {
 	if *isDebugMode {
 		fmt.Fprintln(os.Stderr,
 			append(
-				append([]any{applyStyle(addr_of("\n\033[31m%s"), "PANIC")}, a...),
+				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "PANIC")}, a...),
 				[]any{"\033[0m"}...)...)
 		panic(strings.TrimSuffix(fmt.Sprintln(a...), "\n"))
 	} else {
@@ -216,7 +225,7 @@ func Info(a ...any) {
 	if *isDebugMode {
 		fmt.Println(
 			append(
-				append([]any{applyStyle(addr_of("\n\033[0;36m%s"), "INFO")}, a...),
+				append([]any{applyStyle(StringPtr("\n\033[0;36m%s"), "INFO")}, a...),
 				[]any{"\033[0m"}...)...)
 	} else {
 		exec.Command("logger", "-p", "user.info",
@@ -237,7 +246,7 @@ func Okay(a ...any) {
 	if *isDebugMode {
 		fmt.Println(
 			append(
-				append([]any{applyStyle(addr_of("\n\033[32m%s"), "OK")}, a...),
+				append([]any{applyStyle(StringPtr("\n\033[32m%s"), "OK")}, a...),
 				[]any{"\033[0m"}...)...)
 	} else {
 		exec.Command("logger", "-p", "user.notice",
@@ -258,7 +267,7 @@ func Warning(a ...any) {
 	if *isDebugMode {
 		fmt.Println(
 			append(
-				append([]any{applyStyle(addr_of("\n\033[33m%s"), "WARN")}, a...),
+				append([]any{applyStyle(StringPtr("\n\033[33m%s"), "WARN")}, a...),
 				[]any{"\033[0m"}...)...)
 	} else {
 		exec.Command("logger", "-p", "user.warn",

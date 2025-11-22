@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	Configure("ENV", "dev")
+	Configure("", "", BoolPtr(false))
 }
 
 func TestSetStyle(t *testing.T) {
@@ -43,7 +43,7 @@ func TestSetStyle(t *testing.T) {
 func TestApplyStyle(t *testing.T) {
 	// Test brackets style
 	LoggerStyle = "brackets"
-	result := applyStyle("%s Test", "INFO")
+	result := applyStyle(StringPtr("%s Test"), "INFO")
 	expected := "[INFO] Test"
 	if result != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, result)
@@ -51,7 +51,7 @@ func TestApplyStyle(t *testing.T) {
 
 	// Test colon style
 	LoggerStyle = "colon"
-	result = applyStyle("%s Test", "ERROR")
+	result = applyStyle(StringPtr("%s Test"), "ERROR")
 	expected = "ERROR: Test"
 	if result != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, result)
