@@ -42,34 +42,33 @@ type Cnf struct {
 	UseSyslog bool
 }
 
+func enableDebugMode() {
+	isDebugMode = BoolPtr(true)
+	useSyslog = BoolPtr(false)
+
+	Info("DEBUG MODE ENABLED")
+	Error("If you see this in production, STOP immediately!")
+}
+
+func enableProdMode(shouldUseSyslog bool) {
+	isDebugMode = BoolPtr(false)
+	useSyslog = &shouldUseSyslog
+}
+
 func Configure(c Cnf) {
-	useSyslog = BoolPtr(c.UseSyslog)
-
-	if c.IsDev.DirectValue != nil {
-		isDebugMode = c.IsDev.DirectValue
-
-		if isDebugMode != nil && *isDebugMode == true {
-			useSyslog = BoolPtr(false)
-		}
+	if c.IsDev.DirectValue != nil || *c.IsDev.DirectValue == true {
+		enableDebugMode()
 		return
 	}
 
 	if c.EnvironmentVariable == nil || c.ExpectedValue == nil {
-		fmt.Fprintln(os.Stderr, "invalid configure call signature")
-		os.Exit(1)
-		return
+		panic("invalid configure call signature")
 	}
 
-	enabled := os.Getenv(*c.IsDev.EnvironmentVariable) == *c.ExpectedValue
-	isDebugMode = &enabled
-
-	if isDebugMode != nil && *isDebugMode == true {
-		useSyslog = BoolPtr(false)
-	}
-
-	if enabled {
-		Info("DEBUG MODE ENABLED")
-		Error("If you see this in production, STOP immediately!")
+	if enabled := os.Getenv(*c.IsDev.EnvironmentVariable) == *c.ExpectedValue; enabled == true {
+		enableDebugMode()
+	} else {
+		enableProdMode(c.UseSyslog)
 	}
 }
 
@@ -245,15 +244,15 @@ func Fatal(a ...any) {
 //	Panic("Something went wrong")  // cleanup() will run
 func Panic(a ...any) {
 	if *useSyslog {
+		SyslogStyled(syslog.LOG_ALERT, "PANIC", a...)
+		panic(strings.TrimSuffix(fmt.Sprintln(a...), "\n"))
+	} else {
 		fmt.Fprintln(os.Stderr,
 			append(
 				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "PANIC")}, a...),
 				"\033[0m",
 			)...,
 		)
-		panic(strings.TrimSuffix(fmt.Sprintln(a...), "\n"))
-	} else {
-		SyslogStyled(syslog.LOG_ALERT, "PANIC", a...)
 		panic(strings.TrimSuffix(fmt.Sprintln(a...), "\n"))
 	}
 }
@@ -268,14 +267,14 @@ func Panic(a ...any) {
 //	Info("Processing", itemCount, "items")
 func Info(a ...any) {
 	if *useSyslog {
+		SyslogStyled(syslog.LOG_INFO, "INFO", a...)
+	} else {
 		fmt.Println(
 			append(
 				append([]any{applyStyle(StringPtr("\n\033[0;36m%s"), "INFO")}, a...),
 				"\033[0m",
 			)...,
 		)
-	} else {
-		SyslogStyled(syslog.LOG_INFO, "INFO", a...)
 	}
 }
 
@@ -289,14 +288,14 @@ func Info(a ...any) {
 //	Okay("File saved successfully")
 func Okay(a ...any) {
 	if *useSyslog {
+		SyslogStyled(syslog.LOG_NOTICE, "OK", a...)
+	} else {
 		fmt.Println(
 			append(
 				append([]any{applyStyle(StringPtr("\n\033[32m%s"), "OK")}, a...),
 				"\033[0m",
 			)...,
 		)
-	} else {
-		SyslogStyled(syslog.LOG_NOTICE, "OK", a...)
 	}
 }
 
@@ -310,14 +309,14 @@ func Okay(a ...any) {
 //	Warning("API rate limit approaching")
 func Warning(a ...any) {
 	if *useSyslog {
+		SyslogStyled(syslog.LOG_WARNING, "WARN", a...)
+	} else {
 		fmt.Println(
 			append(
 				append([]any{applyStyle(StringPtr("\n\033[33m%s"), "WARN")}, a...),
 				"\033[0m",
 			)...,
 		)
-	} else {
-		SyslogStyled(syslog.LOG_WARNING, "WARN", a...)
 	}
 }
 
