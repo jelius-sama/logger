@@ -8,7 +8,12 @@ import (
 )
 
 func init() {
-	Configure("", "", BoolPtr(false))
+	Configure(Cnf{
+		IsDev: IsDev{
+			DirectValue: BoolPtr(false),
+		},
+		UseSyslog: false,
+	})
 }
 
 func TestSetStyle(t *testing.T) {
