@@ -47,6 +47,10 @@ func Configure(c Cnf) {
 
 	if c.IsDev.DirectValue != nil {
 		isDebugMode = c.IsDev.DirectValue
+
+		if isDebugMode != nil && *isDebugMode == true {
+			useSyslog = BoolPtr(false)
+		}
 		return
 	}
 
@@ -58,6 +62,10 @@ func Configure(c Cnf) {
 
 	enabled := os.Getenv(*c.IsDev.EnvironmentVariable) == *c.ExpectedValue
 	isDebugMode = &enabled
+
+	if isDebugMode != nil && *isDebugMode == true {
+		useSyslog = BoolPtr(false)
+	}
 
 	if enabled {
 		Info("DEBUG MODE ENABLED")
@@ -71,7 +79,10 @@ func SyslogStyled(pri syslog.Priority, stylePrefix string, a ...any) {
 		return
 	}
 
-	_, err = w.Write([]byte(fmt.Sprintln(append([]any{applyStyle(nil, stylePrefix)}, a...)...)))
+	// TODO: Change all the logs to use more optimized solution than using multiple `append()`
+	buf := make([]byte, 0, 64)
+	buf = fmt.Appendln(buf, append([]any{applyStyle(nil, stylePrefix)}, a...)...)
+	_, err = w.Write(buf)
 	if err != nil {
 		fmt.Fprintln(os.Stderr,
 			append(
