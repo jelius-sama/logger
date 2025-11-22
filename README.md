@@ -307,6 +307,17 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - No external dependencies beyond Go standard library
 
 ## Changelog
+### v1.4.0
+- Breaking changes:
+    - `Configure` takes a structure `Cnf` for clear structure.
+    - Does not depend on `logger` executable anymore.
+
+### v1.3.0
+- Breaking changes:
+    - Configure now takes a third argument, *bool. You can provide a value to explicitly enable or disable production mode, or pass nil to retain the original behavior.
+    - In production mode, logging now uses the logger executable, which is preinstalled on most Linux systems. Availability and permissions for this binary are required.
+    - In production mode, logs now include a priority level. Previously, logs were written only to stdout or stderr. Development mode behavior remains unchanged.
+
 ### v1.0.2
 - `TimedX` now uses UTC time universally.
 
