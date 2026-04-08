@@ -82,6 +82,9 @@ func SyslogStyled(pri syslog.Priority, stylePrefix string, a ...any) {
     if err != nil {
         return
     }
+    if LoggerStyle == "none" {
+        stylePrefix = ""
+    }
 
     // TODO: Change all the logs to use more optimized solution than using multiple `append()`
     buf := make([]byte, 0, 64)
