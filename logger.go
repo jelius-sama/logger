@@ -11,90 +11,90 @@
 package logger
 
 import (
-	"fmt"
-	"log/syslog"
-	"os"
-	"strings"
-	"time"
+    "fmt"
+    "log/syslog"
+    "os"
+    "strings"
+    "time"
 )
 
 var (
-	// LoggerStyle defines the current output format style.
-	// Valid values are "brackets" for [LEVEL] format and "colon" for LEVEL: format.
-	// Defaults to "brackets" style.
-	LoggerStyle string = "brackets"
+    // LoggerStyle defines the current output format style.
+    // Valid values are "brackets" for [LEVEL] format and "colon" for LEVEL: format.
+    // Defaults to "brackets" style.
+    LoggerStyle string = "brackets"
 
-	isDebugMode *bool
-	useSyslog   *bool
+    isDebugMode *bool
+    useSyslog   *bool
 )
 
 // Configure sets up debug mode detection (call once at startup)
 // NOTE: Configure is expected to be called at least once before using any of the logging functions
 type IsDev struct {
-	EnvironmentVariable *string
-	// Environment variables are usually strings
-	ExpectedValue *string
-	DirectValue   *bool
+    EnvironmentVariable *string
+    // Environment variables are usually strings
+    ExpectedValue *string
+    DirectValue   *bool
 }
 
 type Cnf struct {
-	IsDev
-	UseSyslog bool
+    IsDev
+    UseSyslog bool
 }
 
 func enableDebugMode() {
-	isDebugMode = BoolPtr(true)
-	useSyslog = BoolPtr(false)
+    isDebugMode = BoolPtr(true)
+    useSyslog = BoolPtr(false)
 
-	Info("DEBUG MODE ENABLED")
-	Error("If you see this in production, STOP immediately!")
+    Info("DEBUG MODE ENABLED")
+    Error("If you see this in production, STOP immediately!")
 }
 
 func enableProdMode(shouldUseSyslog bool) {
-	isDebugMode = BoolPtr(false)
-	useSyslog = &shouldUseSyslog
+    isDebugMode = BoolPtr(false)
+    useSyslog = &shouldUseSyslog
 }
 
 func Configure(c Cnf) {
-	if c.IsDev.DirectValue != nil {
-		if *c.IsDev.DirectValue == true {
-			enableDebugMode()
-		} else {
-			enableProdMode(c.UseSyslog)
-		}
+    if c.IsDev.DirectValue != nil {
+        if *c.IsDev.DirectValue == true {
+            enableDebugMode()
+        } else {
+            enableProdMode(c.UseSyslog)
+        }
 
-		return
-	}
+        return
+    }
 
-	if c.EnvironmentVariable == nil || c.ExpectedValue == nil {
-		panic("invalid configure call signature")
-	}
+    if c.EnvironmentVariable == nil || c.ExpectedValue == nil {
+        panic("invalid configure call signature")
+    }
 
-	if enabled := os.Getenv(*c.IsDev.EnvironmentVariable) == *c.ExpectedValue; enabled == true {
-		enableDebugMode()
-	} else {
-		enableProdMode(c.UseSyslog)
-	}
+    if enabled := os.Getenv(*c.IsDev.EnvironmentVariable) == *c.ExpectedValue; enabled == true {
+        enableDebugMode()
+    } else {
+        enableProdMode(c.UseSyslog)
+    }
 }
 
 func SyslogStyled(pri syslog.Priority, stylePrefix string, a ...any) {
-	w, err := syslog.New(pri|syslog.LOG_USER, "")
-	if err != nil {
-		return
-	}
+    w, err := syslog.New(pri|syslog.LOG_USER, "")
+    if err != nil {
+        return
+    }
 
-	// TODO: Change all the logs to use more optimized solution than using multiple `append()`
-	buf := make([]byte, 0, 64)
-	buf = fmt.Appendln(buf, append([]any{applyStyle(nil, stylePrefix)}, a...)...)
-	_, err = w.Write(buf)
-	if err != nil {
-		fmt.Fprintln(os.Stderr,
-			append(
-				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "ERROR")}, "error writing to syslog"),
-				"\033[0m",
-			)...,
-		)
-	}
+    // TODO: Change all the logs to use more optimized solution than using multiple `append()`
+    buf := make([]byte, 0, 64)
+    buf = fmt.Appendln(buf, append([]any{applyStyle(nil, stylePrefix)}, a...)...)
+    _, err = w.Write(buf)
+    if err != nil {
+        fmt.Fprintln(os.Stderr,
+            append(
+                append([]any{applyStyle(StringPtr("\n\033[31m%s"), "ERROR")}, "error writing to syslog"),
+                "\033[0m",
+            )...,
+        )
+    }
 }
 
 // SetStyle changes the logger output format style.
@@ -107,22 +107,27 @@ func SyslogStyled(pri syslog.Priority, stylePrefix string, a ...any) {
 //	SetStyle("colon")    // Changes to "INFO: message" format
 //	SetStyle("brackets") // Changes to "[INFO] message" format
 func SetStyle(s string) {
-	switch s {
-	case "brackets":
-		LoggerStyle = "brackets"
-		Okay("Logger style set to `" + LoggerStyle + "`.")
-		return
+    switch s {
+    case "brackets":
+        LoggerStyle = "brackets"
+        Okay("Logger style set to `" + LoggerStyle + "`.")
+        return
 
-	case "colon":
-		LoggerStyle = "colon"
-		Okay("Logger style set to `" + LoggerStyle + "`.")
-		return
+    case "colon":
+        LoggerStyle = "colon"
+        Okay("Logger style set to `" + LoggerStyle + "`.")
+        return
 
-	default:
-		LoggerStyle = "brackets"
-		Warning("Logger style " + s + " does not exists, setting to default instead!")
-		return
-	}
+    case "none":
+        LoggerStyle = "none"
+        Okay("Logger style set to `none`.")
+        return
+
+    default:
+        LoggerStyle = "brackets"
+        Warning("Logger style " + s + " does not exists, setting to default instead!")
+        return
+    }
 }
 
 // applyStyle formats a label according to the current LoggerStyle setting.
@@ -130,41 +135,47 @@ func SetStyle(s string) {
 // It takes a format string and a label, returning the formatted result.
 // Falls back to brackets format if an invalid LoggerStyle is encountered.
 func applyStyle(format *string, label string) string {
-	if format != nil {
-		switch LoggerStyle {
-		case "brackets":
-			return fmt.Sprintf(*format, "["+label+"]")
+    if format != nil {
+        switch LoggerStyle {
+        case "none":
+            return fmt.Sprintf(*format, "")
 
-		case "colon":
-			return fmt.Sprintf(*format, label+":")
+        case "brackets":
+            return fmt.Sprintf(*format, "["+label+"]")
 
-		default:
-			Error("Unreachable code reached!")
-			return fmt.Sprintf(*format, "["+label+"]")
-		}
-	} else {
-		switch LoggerStyle {
-		case "brackets":
-			return fmt.Sprintf("[" + label + "]")
+        case "colon":
+            return fmt.Sprintf(*format, label+":")
 
-		case "colon":
-			return fmt.Sprintf(label + ":")
+        default:
+            Error("Unreachable code reached!")
+            return fmt.Sprintf(*format, "["+label+"]")
+        }
+    } else {
+        switch LoggerStyle {
+        case "none":
+            return ""
 
-		default:
-			Error("Unreachable code reached!")
-			return fmt.Sprintf("[" + label + "]")
-		}
-	}
+        case "brackets":
+            return fmt.Sprintf("[" + label + "]")
+
+        case "colon":
+            return fmt.Sprintf(label + ":")
+
+        default:
+            Error("Unreachable code reached!")
+            return fmt.Sprintf("[" + label + "]")
+        }
+    }
 }
 
 // StringPtr takes a string and returns a pointer to it.
 func StringPtr(s string) *string {
-	return &s
+    return &s
 }
 
 // BoolPtr takes a bool and returns a pointer to it.
 func BoolPtr(s bool) *bool {
-	return &s
+    return &s
 }
 
 // Error logs an error message to stderr with red coloring.
@@ -177,16 +188,16 @@ func BoolPtr(s bool) *bool {
 //	Error("Database connection failed")
 //	Error("Invalid input:", userInput, "expected number")
 func Error(a ...any) {
-	if *useSyslog {
-		SyslogStyled(syslog.LOG_ERR, "ERROR", a...)
-	} else {
-		fmt.Fprintln(os.Stderr,
-			append(
-				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "ERROR")}, a...),
-				"\033[0m",
-			)...,
-		)
-	}
+    if *useSyslog {
+        SyslogStyled(syslog.LOG_ERR, "ERROR", a...)
+    } else {
+        fmt.Fprintln(os.Stderr,
+            append(
+                append([]any{applyStyle(StringPtr("\n\033[31m%s"), "ERROR")}, a...),
+                "\033[0m",
+            )...,
+        )
+    }
 }
 
 // Debug logs a debug message to stdout with blue coloring.
@@ -198,18 +209,18 @@ func Error(a ...any) {
 //	Debug("Processing user request")
 //	Debug("Variable value:", someVar)
 func Debug(a ...any) {
-	if *isDebugMode {
-		if *useSyslog {
-			SyslogStyled(syslog.LOG_DEBUG, "DEBUG", a...)
-		} else {
-			fmt.Println(
-				append(
-					append([]any{applyStyle(StringPtr("\n\033[34m%s"), "DEBUG")}, a...),
-					"\033[0m",
-				)...,
-			)
-		}
-	}
+    if *isDebugMode {
+        if *useSyslog {
+            SyslogStyled(syslog.LOG_DEBUG, "DEBUG", a...)
+        } else {
+            fmt.Println(
+                append(
+                    append([]any{applyStyle(StringPtr("\n\033[34m%s"), "DEBUG")}, a...),
+                    "\033[0m",
+                )...,
+            )
+        }
+    }
 }
 
 // Fatal logs a fatal error message to stderr with red coloring and immediately
@@ -221,18 +232,18 @@ func Debug(a ...any) {
 //
 //	Fatal("Critical system failure - cannot continue")
 func Fatal(a ...any) {
-	if *useSyslog {
-		SyslogStyled(syslog.LOG_EMERG, "FATAL", a...)
-		os.Exit(-1)
-	} else {
-		fmt.Fprintln(os.Stderr,
-			append(
-				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "FATAL")}, a...),
-				"\033[0m",
-			)...,
-		)
-		os.Exit(-1)
-	}
+    if *useSyslog {
+        SyslogStyled(syslog.LOG_EMERG, "FATAL", a...)
+        os.Exit(-1)
+    } else {
+        fmt.Fprintln(os.Stderr,
+            append(
+                append([]any{applyStyle(StringPtr("\n\033[31m%s"), "FATAL")}, a...),
+                "\033[0m",
+            )...,
+        )
+        os.Exit(-1)
+    }
 }
 
 // Panic logs a panic message to stderr with red coloring and triggers a panic.
@@ -248,18 +259,18 @@ func Fatal(a ...any) {
 //	defer cleanup()
 //	Panic("Something went wrong")  // cleanup() will run
 func Panic(a ...any) {
-	if *useSyslog {
-		SyslogStyled(syslog.LOG_ALERT, "PANIC", a...)
-		panic(strings.TrimSuffix(fmt.Sprintln(a...), "\n"))
-	} else {
-		fmt.Fprintln(os.Stderr,
-			append(
-				append([]any{applyStyle(StringPtr("\n\033[31m%s"), "PANIC")}, a...),
-				"\033[0m",
-			)...,
-		)
-		panic(strings.TrimSuffix(fmt.Sprintln(a...), "\n"))
-	}
+    if *useSyslog {
+        SyslogStyled(syslog.LOG_ALERT, "PANIC", a...)
+        panic(strings.TrimSuffix(fmt.Sprintln(a...), "\n"))
+    } else {
+        fmt.Fprintln(os.Stderr,
+            append(
+                append([]any{applyStyle(StringPtr("\n\033[31m%s"), "PANIC")}, a...),
+                "\033[0m",
+            )...,
+        )
+        panic(strings.TrimSuffix(fmt.Sprintln(a...), "\n"))
+    }
 }
 
 // Info logs an informational message to stdout with cyan coloring.
@@ -271,16 +282,16 @@ func Panic(a ...any) {
 //	Info("Application started successfully")
 //	Info("Processing", itemCount, "items")
 func Info(a ...any) {
-	if *useSyslog {
-		SyslogStyled(syslog.LOG_INFO, "INFO", a...)
-	} else {
-		fmt.Println(
-			append(
-				append([]any{applyStyle(StringPtr("\n\033[0;36m%s"), "INFO")}, a...),
-				"\033[0m",
-			)...,
-		)
-	}
+    if *useSyslog {
+        SyslogStyled(syslog.LOG_INFO, "INFO", a...)
+    } else {
+        fmt.Println(
+            append(
+                append([]any{applyStyle(StringPtr("\n\033[0;36m%s"), "INFO")}, a...),
+                "\033[0m",
+            )...,
+        )
+    }
 }
 
 // Okay logs a success message to stdout with green coloring.
@@ -292,16 +303,16 @@ func Info(a ...any) {
 //	Okay("Database connection established")
 //	Okay("File saved successfully")
 func Okay(a ...any) {
-	if *useSyslog {
-		SyslogStyled(syslog.LOG_NOTICE, "OK", a...)
-	} else {
-		fmt.Println(
-			append(
-				append([]any{applyStyle(StringPtr("\n\033[32m%s"), "OK")}, a...),
-				"\033[0m",
-			)...,
-		)
-	}
+    if *useSyslog {
+        SyslogStyled(syslog.LOG_NOTICE, "OK", a...)
+    } else {
+        fmt.Println(
+            append(
+                append([]any{applyStyle(StringPtr("\n\033[32m%s"), "OK")}, a...),
+                "\033[0m",
+            )...,
+        )
+    }
 }
 
 // Warning logs a warning message to stdout with yellow coloring.
@@ -313,16 +324,16 @@ func Okay(a ...any) {
 //	Warning("Configuration file not found, using defaults")
 //	Warning("API rate limit approaching")
 func Warning(a ...any) {
-	if *useSyslog {
-		SyslogStyled(syslog.LOG_WARNING, "WARN", a...)
-	} else {
-		fmt.Println(
-			append(
-				append([]any{applyStyle(StringPtr("\n\033[33m%s"), "WARN")}, a...),
-				"\033[0m",
-			)...,
-		)
-	}
+    if *useSyslog {
+        SyslogStyled(syslog.LOG_WARNING, "WARN", a...)
+    } else {
+        fmt.Println(
+            append(
+                append([]any{applyStyle(StringPtr("\n\033[33m%s"), "WARN")}, a...),
+                "\033[0m",
+            )...,
+        )
+    }
 }
 
 // TimedError logs an error message with a timestamp prefix.
@@ -334,7 +345,7 @@ func Warning(a ...any) {
 //	TimedError("Connection timeout")
 //	// Output: [ERROR] 2006/01/02 15:04:05 Connection timeout
 func TimedError(a ...any) {
-	Error(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
+    Error(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
 
 // TimedDebug logs a debug message with a timestamp prefix.
@@ -346,7 +357,7 @@ func TimedError(a ...any) {
 //	TimedDebug("Cache miss for key:", key)
 //	// Output: [DEBUG] 2006/01/02 15:04:05 Cache miss for key: user123
 func TimedDebug(a ...any) {
-	Debug(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
+    Debug(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
 
 // TimedFatal logs a fatal error message with a timestamp prefix and exits.
@@ -358,7 +369,7 @@ func TimedDebug(a ...any) {
 //	TimedFatal("System corruption detected")
 //	// Output: [FATAL] 2006/01/02 15:04:05 System corruption detected
 func TimedFatal(a ...any) {
-	Fatal(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
+    Fatal(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
 
 // TimedPanic logs a panic message with a timestamp prefix and triggers panic.
@@ -370,7 +381,7 @@ func TimedFatal(a ...any) {
 //	TimedPanic("Critical state reached")
 //	// Output: [PANIC] 2006/01/02 15:04:05 Critical state reached
 func TimedPanic(a ...any) {
-	Panic(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
+    Panic(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
 
 // TimedInfo logs an informational message with a timestamp prefix.
@@ -382,7 +393,7 @@ func TimedPanic(a ...any) {
 //	TimedInfo("User login successful")
 //	// Output: [INFO] 2006/01/02 15:04:05 User login successful
 func TimedInfo(a ...any) {
-	Info(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
+    Info(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
 
 // TimedOkay logs a success message with a timestamp prefix.
@@ -394,7 +405,7 @@ func TimedInfo(a ...any) {
 //	TimedOkay("Backup completed")
 //	// Output: [OK] 2006/01/02 15:04:05 Backup completed
 func TimedOkay(a ...any) {
-	Okay(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
+    Okay(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
 
 // TimedWarning logs a warning message with a timestamp prefix.
@@ -406,5 +417,6 @@ func TimedOkay(a ...any) {
 //	TimedWarning("Disk space low")
 //	// Output: [WARN] 2006/01/02 15:04:05 Disk space low
 func TimedWarning(a ...any) {
-	Warning(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
+    Warning(append([]any{time.Now().UTC().Format("2006/01/02 15:04:05")}, a...)...)
 }
+
