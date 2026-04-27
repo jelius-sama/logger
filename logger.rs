@@ -1,4 +1,4 @@
-use std::ffi::{c_char, CString};
+use std::ffi::c_char;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 #[repr(C)]
@@ -105,6 +105,150 @@ pub unsafe extern "C" fn Info(msg: String) {
                 }
                 LogStyle::SNone => {
                     println!("{}{}{}", COLOR_INFO, message, RESET);
+                }
+            }
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Okay(msg: String) {
+    let ptr = CONFIG.load(Ordering::Acquire);
+    if ptr.is_null() {
+        return;
+    }
+
+    let cfg = &*ptr;
+
+    if LogLevel::LOkay >= cfg.level {
+        let slice = std::slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
+        if let Ok(message) = std::str::from_utf8(slice) {
+            match cfg.style {
+                LogStyle::SBrackets => {
+                    println!("{}[Ok] {}{}", COLOR_OKAY, message, RESET);
+                }
+                LogStyle::SColon => {
+                    println!("{}OK: {}{}", COLOR_OKAY, message, RESET);
+                }
+                LogStyle::SNone => {
+                    println!("{}{}{}", COLOR_OKAY, message, RESET);
+                }
+            }
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Warn(msg: String) {
+    let ptr = CONFIG.load(Ordering::Acquire);
+    if ptr.is_null() {
+        return;
+    }
+
+    let cfg = &*ptr;
+
+    if LogLevel::LWarn >= cfg.level {
+        let slice = std::slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
+        if let Ok(message) = std::str::from_utf8(slice) {
+            match cfg.style {
+                LogStyle::SBrackets => {
+                    println!("{}[WARN] {}{}", COLOR_WARN, message, RESET);
+                }
+                LogStyle::SColon => {
+                    println!("{}WARN: {}{}", COLOR_WARN, message, RESET);
+                }
+                LogStyle::SNone => {
+                    println!("{}{}{}", COLOR_WARN, message, RESET);
+                }
+            }
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Error(msg: String) {
+    let ptr = CONFIG.load(Ordering::Acquire);
+    if ptr.is_null() {
+        return;
+    }
+
+    let cfg = &*ptr;
+
+    if LogLevel::LError >= cfg.level {
+        let slice = std::slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
+        if let Ok(message) = std::str::from_utf8(slice) {
+            match cfg.style {
+                LogStyle::SBrackets => {
+                    println!("{}[ERROR] {}{}", COLOR_ERROR, message, RESET);
+                }
+                LogStyle::SColon => {
+                    println!("{}ERROR: {}{}", COLOR_ERROR, message, RESET);
+                }
+                LogStyle::SNone => {
+                    println!("{}{}{}", COLOR_ERROR, message, RESET);
+                }
+            }
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Fatal(msg: String) {
+    let ptr = CONFIG.load(Ordering::Acquire);
+    if ptr.is_null() {
+        return;
+    }
+
+    let cfg = &*ptr;
+
+    if LogLevel::LFatal >= cfg.level {
+        let slice = std::slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
+        if let Ok(message) = std::str::from_utf8(slice) {
+            match cfg.style {
+                LogStyle::SBrackets => {
+                    println!("{}{}[FATAL] {}{}", COLOR_ERROR, STYLE_BOLD, message, RESET);
+                }
+                LogStyle::SColon => {
+                    println!("{}{}FATAL: {}{}", COLOR_ERROR, STYLE_BOLD, message, RESET);
+                }
+                LogStyle::SNone => {
+                    println!("{}{}{}{}", COLOR_ERROR, STYLE_BOLD, message, RESET);
+                }
+            }
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Panic(msg: String) {
+    let ptr = CONFIG.load(Ordering::Acquire);
+    if ptr.is_null() {
+        return;
+    }
+
+    let cfg = &*ptr;
+
+    if LogLevel::LPanic >= cfg.level {
+        let slice = std::slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
+        if let Ok(message) = std::str::from_utf8(slice) {
+            match cfg.style {
+                LogStyle::SBrackets => {
+                    println!(
+                        "{}{}{}[PANIC] {}{}",
+                        COLOR_ERROR, STYLE_BOLD, STYLE_ITALIC, message, RESET
+                    );
+                }
+                LogStyle::SColon => {
+                    println!(
+                        "{}{}{}PANIC: {}{}",
+                        COLOR_ERROR, STYLE_BOLD, STYLE_ITALIC, message, RESET
+                    );
+                }
+                LogStyle::SNone => {
+                    println!(
+                        "{}{}{}{}{}",
+                        COLOR_ERROR, STYLE_BOLD, STYLE_ITALIC, message, RESET
+                    );
                 }
             }
         }

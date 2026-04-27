@@ -9,12 +9,38 @@ import (
 )
 
 func main() {
-    result := 668 + 669
+    msg := fmt.Sprintf("Addition result: %d", 668+669)
 
-    // Configure and Log
     C.Configure(C.LDebug, C.SBrackets)
 
-    C.Debug(fmt.Sprintf("Addition result: %d", result))
-    C.Info(fmt.Sprintf("Addition result: %d", result))
+    C.Debug(msg)
+    C.Info(msg)
+    C.Okay(msg)
+    C.Warn(msg)
+    C.Error(msg)
+    C.Fatal(msg)
+    C.Panic(msg)
+
+    fmt.Printf("\n")
+    C.Configure(C.LDebug, C.SColon)
+
+    C.Debug(msg)
+    C.Info(msg)
+    C.Okay(msg)
+    C.Warn(msg)
+    C.Error(msg)
+    C.Fatal(msg)
+    C.Panic(msg)
+
+    fmt.Printf("\n")
+    C.Configure(C.LDebug, C.SNone)
+
+    C.Debug(msg)
+    C.Info(msg)
+    C.Okay(msg)
+    C.Warn(msg)
+    C.Error(msg)
+    C.Fatal(msg)
+    C.Panic(msg)
 }
 
