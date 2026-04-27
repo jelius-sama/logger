@@ -1,10 +1,11 @@
 #include "logger.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 int main(void) {
   // Perform addition in C
   int result = 210 + 210;
-  char msg[50];
+  char *msg = malloc(50);
   sprintf(msg, "Addition result: %d", result);
 
   // Setup the global logger state

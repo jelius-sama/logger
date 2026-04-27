@@ -47,10 +47,10 @@ pub unsafe extern "C" fn Configure(level: LogLevel, style: LogStyle) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn Debug(msg: *const c_char) {
-    if msg.is_null() {
-        return;
-    }
+pub unsafe extern "C" fn Debug(msg: *mut c_char) {
+    let msg = match CString::from_raw(msg) {
+        cstring => cstring,
+    };
 
     let ptr = CONFIG.load(Ordering::Acquire);
     if ptr.is_null() {
@@ -60,7 +60,7 @@ pub unsafe extern "C" fn Debug(msg: *const c_char) {
     let cfg = &*ptr;
 
     if matches!(cfg.level, LogLevel::LDebug) {
-        if let Ok(message) = CStr::from_ptr(msg).to_str() {
+        if let Ok(message) = msg.to_str() {
             match cfg.style {
                 LogStyle::SBrackets => {
                     println!("{}[DEBUG] {}{}", COLOR_DEBUG, message, RESET);

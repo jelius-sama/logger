@@ -16,17 +16,15 @@ pub enum LogStyle {
 
 extern "C" {
     fn Configure(level: LogLevel, style: LogStyle);
-    fn Debug(msg: *const std::os::raw::c_char);
+    fn Debug(msg: *mut std::os::raw::c_char);
 }
 
 fn main() {
     let result = 34 + 35;
     let msg = format!("Addition result: {}", result);
 
-    let c_msg = CString::new(msg).unwrap();
-
     unsafe {
         Configure(LogLevel::LDebug, LogStyle::SBrackets);
-        Debug(c_msg.as_ptr());
+        Debug(CString::new(msg).unwrap().into_raw());
     }
 }
