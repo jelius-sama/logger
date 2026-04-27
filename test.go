@@ -15,5 +15,7 @@ func main() {
     // Configure and Log
     C.Configure(C.LDebug, C.SBrackets)
     C.Debug(C.CString(fmt.Sprintf("Addition result: %d", result)))
+
+    C.Info(fmt.Sprintf("Addition result: %d", result))
 }
 

@@ -1,11 +1,16 @@
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, CString};
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 #[repr(C)]
+#[derive(PartialEq, PartialOrd)]
 pub enum LogLevel {
-    LDebug,
-    LInfo,
-    LError,
+    LDebug = 0,
+    LInfo = 1,
+    LOkay = 2,
+    LWarn = 3,
+    LError = 4,
+    LFatal = 5,
+    LPanic = 6,
 }
 
 #[repr(C)]
@@ -19,6 +24,12 @@ pub enum LogStyle {
 pub struct LoggerConfig {
     pub level: LogLevel,
     pub style: LogStyle,
+}
+
+#[repr(C)]
+pub struct String {
+    pub data: *const c_char,
+    pub len: i64,
 }
 
 static CONFIG: AtomicPtr<LoggerConfig> = AtomicPtr::new(std::ptr::null_mut());
@@ -59,7 +70,7 @@ pub unsafe extern "C" fn Debug(msg: *mut c_char) {
 
     let cfg = &*ptr;
 
-    if matches!(cfg.level, LogLevel::LDebug) {
+    if LogLevel::LDebug >= cfg.level {
         if let Ok(message) = msg.to_str() {
             match cfg.style {
                 LogStyle::SBrackets => {
@@ -70,6 +81,33 @@ pub unsafe extern "C" fn Debug(msg: *mut c_char) {
                 }
                 LogStyle::SNone => {
                     println!("{}{}{}", COLOR_DEBUG, message, RESET);
+                }
+            }
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Info(msg: String) {
+    let ptr = CONFIG.load(Ordering::Acquire);
+    if ptr.is_null() {
+        return;
+    }
+
+    let cfg = &*ptr;
+
+    if LogLevel::LInfo >= cfg.level {
+        let slice = std::slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
+        if let Ok(message) = std::str::from_utf8(slice) {
+            match cfg.style {
+                LogStyle::SBrackets => {
+                    println!("{}[INFO] {}{}", COLOR_INFO, message, RESET);
+                }
+                LogStyle::SColon => {
+                    println!("{}INFO: {}{}", COLOR_INFO, message, RESET);
+                }
+                LogStyle::SNone => {
+                    println!("{}{}{}", COLOR_INFO, message, RESET);
                 }
             }
         }
