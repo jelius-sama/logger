@@ -2,7 +2,6 @@ package main
 
 /*
 #include "logger.h"
-#include <stdlib.h>
 */
 import "C"
 import (
@@ -14,8 +13,8 @@ func main() {
 
     // Configure and Log
     C.Configure(C.LDebug, C.SBrackets)
-    C.Debug(C.CString(fmt.Sprintf("Addition result: %d", result)))
 
+    C.Debug(fmt.Sprintf("Addition result: %d", result))
     C.Info(fmt.Sprintf("Addition result: %d", result))
 }
 
