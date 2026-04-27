@@ -1,5 +1,7 @@
-use std::ffi::c_char;
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::{
+    ffi::c_char,
+    sync::atomic::{AtomicPtr, Ordering},
+};
 
 #[repr(C)]
 #[derive(PartialEq, PartialOrd)]
@@ -57,8 +59,7 @@ pub unsafe extern "C" fn Configure(level: LogLevel, style: LogStyle) {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn Debug(msg: String) {
+unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style: Option<&str>) {
     let ptr = CONFIG.load(Ordering::Acquire);
     if ptr.is_null() {
         return;
@@ -66,191 +67,111 @@ pub unsafe extern "C" fn Debug(msg: String) {
 
     let cfg = &*ptr;
 
-    if LogLevel::LDebug >= cfg.level {
+    let logger_fn = |args: std::fmt::Arguments| {
+        if log_level >= LogLevel::LWarn {
+            eprintln!("{}", args);
+        } else {
+            println!("{}", args);
+        }
+    };
+
+    macro_rules! logger {
+        ($($arg:tt)*) => {
+            logger_fn(format_args!($($arg)*))
+        };
+    }
+
+    if log_level >= cfg.level {
         let slice = std::slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
         if let Ok(message) = std::str::from_utf8(slice) {
             match cfg.style {
                 LogStyle::SBrackets => {
-                    println!("{}[DEBUG] {}{}", COLOR_DEBUG, message, RESET);
+                    if log_level >= LogLevel::LFatal {
+                        logger!(
+                            "{}{}[{}] {}{}",
+                            color,
+                            style.unwrap(),
+                            header,
+                            message,
+                            RESET,
+                        );
+                    }
+                    logger!("{}[{}] {}{}", color, header, message, RESET);
                 }
                 LogStyle::SColon => {
-                    println!("{}DEBUG: {}{}", COLOR_DEBUG, message, RESET);
+                    if log_level >= LogLevel::LFatal {
+                        logger!(
+                            "{}{}[{}] {}{}",
+                            color,
+                            style.unwrap(),
+                            header,
+                            message,
+                            RESET,
+                        );
+                    }
+                    logger!("{}{}: {}{}", color, header, message, RESET);
                 }
                 LogStyle::SNone => {
-                    println!("{}{}{}", COLOR_DEBUG, message, RESET);
+                    if log_level >= LogLevel::LFatal {
+                        logger!(
+                            "{}{}[{}] {}{}",
+                            color,
+                            style.unwrap(),
+                            header,
+                            message,
+                            RESET,
+                        );
+                    }
+                    logger!("{}{}{}", color, message, RESET);
                 }
             }
         }
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Debug(msg: String) {
+    log(LogLevel::LDebug, "DEBUG", msg, COLOR_DEBUG, None)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn Info(msg: String) {
-    let ptr = CONFIG.load(Ordering::Acquire);
-    if ptr.is_null() {
-        return;
-    }
-
-    let cfg = &*ptr;
-
-    if LogLevel::LInfo >= cfg.level {
-        let slice = std::slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
-        if let Ok(message) = std::str::from_utf8(slice) {
-            match cfg.style {
-                LogStyle::SBrackets => {
-                    println!("{}[INFO] {}{}", COLOR_INFO, message, RESET);
-                }
-                LogStyle::SColon => {
-                    println!("{}INFO: {}{}", COLOR_INFO, message, RESET);
-                }
-                LogStyle::SNone => {
-                    println!("{}{}{}", COLOR_INFO, message, RESET);
-                }
-            }
-        }
-    }
+    log(LogLevel::LInfo, "INFO", msg, COLOR_INFO, None)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn Okay(msg: String) {
-    let ptr = CONFIG.load(Ordering::Acquire);
-    if ptr.is_null() {
-        return;
-    }
-
-    let cfg = &*ptr;
-
-    if LogLevel::LOkay >= cfg.level {
-        let slice = std::slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
-        if let Ok(message) = std::str::from_utf8(slice) {
-            match cfg.style {
-                LogStyle::SBrackets => {
-                    println!("{}[Ok] {}{}", COLOR_OKAY, message, RESET);
-                }
-                LogStyle::SColon => {
-                    println!("{}OK: {}{}", COLOR_OKAY, message, RESET);
-                }
-                LogStyle::SNone => {
-                    println!("{}{}{}", COLOR_OKAY, message, RESET);
-                }
-            }
-        }
-    }
+    log(LogLevel::LOkay, "OK", msg, COLOR_OKAY, None)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn Warn(msg: String) {
-    let ptr = CONFIG.load(Ordering::Acquire);
-    if ptr.is_null() {
-        return;
-    }
-
-    let cfg = &*ptr;
-
-    if LogLevel::LWarn >= cfg.level {
-        let slice = std::slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
-        if let Ok(message) = std::str::from_utf8(slice) {
-            match cfg.style {
-                LogStyle::SBrackets => {
-                    println!("{}[WARN] {}{}", COLOR_WARN, message, RESET);
-                }
-                LogStyle::SColon => {
-                    println!("{}WARN: {}{}", COLOR_WARN, message, RESET);
-                }
-                LogStyle::SNone => {
-                    println!("{}{}{}", COLOR_WARN, message, RESET);
-                }
-            }
-        }
-    }
+    log(LogLevel::LWarn, "WARN", msg, COLOR_WARN, None)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn Error(msg: String) {
-    let ptr = CONFIG.load(Ordering::Acquire);
-    if ptr.is_null() {
-        return;
-    }
-
-    let cfg = &*ptr;
-
-    if LogLevel::LError >= cfg.level {
-        let slice = std::slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
-        if let Ok(message) = std::str::from_utf8(slice) {
-            match cfg.style {
-                LogStyle::SBrackets => {
-                    println!("{}[ERROR] {}{}", COLOR_ERROR, message, RESET);
-                }
-                LogStyle::SColon => {
-                    println!("{}ERROR: {}{}", COLOR_ERROR, message, RESET);
-                }
-                LogStyle::SNone => {
-                    println!("{}{}{}", COLOR_ERROR, message, RESET);
-                }
-            }
-        }
-    }
+    log(LogLevel::LError, "ERROR", msg, COLOR_ERROR, None)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn Fatal(msg: String) {
-    let ptr = CONFIG.load(Ordering::Acquire);
-    if ptr.is_null() {
-        return;
-    }
-
-    let cfg = &*ptr;
-
-    if LogLevel::LFatal >= cfg.level {
-        let slice = std::slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
-        if let Ok(message) = std::str::from_utf8(slice) {
-            match cfg.style {
-                LogStyle::SBrackets => {
-                    println!("{}{}[FATAL] {}{}", COLOR_ERROR, STYLE_BOLD, message, RESET);
-                }
-                LogStyle::SColon => {
-                    println!("{}{}FATAL: {}{}", COLOR_ERROR, STYLE_BOLD, message, RESET);
-                }
-                LogStyle::SNone => {
-                    println!("{}{}{}{}", COLOR_ERROR, STYLE_BOLD, message, RESET);
-                }
-            }
-        }
-    }
+    log(
+        LogLevel::LFatal,
+        "FATAL",
+        msg,
+        COLOR_ERROR,
+        Some(STYLE_BOLD),
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn Panic(msg: String) {
-    let ptr = CONFIG.load(Ordering::Acquire);
-    if ptr.is_null() {
-        return;
-    }
-
-    let cfg = &*ptr;
-
-    if LogLevel::LPanic >= cfg.level {
-        let slice = std::slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
-        if let Ok(message) = std::str::from_utf8(slice) {
-            match cfg.style {
-                LogStyle::SBrackets => {
-                    println!(
-                        "{}{}{}[PANIC] {}{}",
-                        COLOR_ERROR, STYLE_BOLD, STYLE_ITALIC, message, RESET
-                    );
-                }
-                LogStyle::SColon => {
-                    println!(
-                        "{}{}{}PANIC: {}{}",
-                        COLOR_ERROR, STYLE_BOLD, STYLE_ITALIC, message, RESET
-                    );
-                }
-                LogStyle::SNone => {
-                    println!(
-                        "{}{}{}{}{}",
-                        COLOR_ERROR, STYLE_BOLD, STYLE_ITALIC, message, RESET
-                    );
-                }
-            }
-        }
-    }
+    log(
+        LogLevel::LPanic,
+        "PANIC",
+        msg,
+        COLOR_ERROR,
+        Some(STYLE_ITALIC),
+    )
 }
