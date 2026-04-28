@@ -50,16 +50,16 @@ const STYLE_UNDERLINE: &str = "\x1b[4m";
 
 const RESET: &str = "\x1b[0m";
 
-pub mod LibMailer {
+pub mod lib_mailer {
     use std::ffi::{c_char, c_int};
 
     #[repr(C)]
     pub struct MailerConfig {
-        pub Host: *mut c_char,
-        pub Port: c_int,
-        pub Username: *mut c_char,
-        pub Password: *mut c_char,
-        pub From: *mut c_char,
+        pub host: *mut c_char,
+        pub port: c_int,
+        pub username: *mut c_char,
+        pub password: *mut c_char,
+        pub from: *mut c_char,
     }
 
     #[repr(C)]
@@ -76,7 +76,7 @@ pub mod LibMailer {
             -> c_int;
 
         pub fn LoadConfigFromPath(
-            configPath: *const c_char,
+            config_path: *const c_char,
             out_config: *mut *mut MailerConfig,
             out_error: *mut *mut c_char,
         ) -> c_int;
@@ -92,8 +92,8 @@ pub mod LibMailer {
         pub fn FormatEmailAddress(addr: *const c_char, out_formatted: *mut *mut c_char);
 
         pub fn SendMail(
-            smtpHost: *const c_char,
-            smtpPort: c_int,
+            smtp_host: *const c_char,
+            smtp_port: c_int,
             username: *const c_char,
             password: *const c_char,
             from: *const c_char,
@@ -109,11 +109,11 @@ pub mod LibMailer {
         pub fn FreeStrArr(arr: *mut StrArr);
 
         pub fn SendRawEML(
-            smtpHost: *const c_char,
-            smtpPort: c_int,
+            smtp_host: *const c_char,
+            smtp_port: c_int,
             username: *const c_char,
             password: *const c_char,
-            emlPath: *const c_char,
+            eml_path: *const c_char,
             out_error: *mut *mut c_char,
         ) -> c_int;
     }
