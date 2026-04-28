@@ -1,10 +1,12 @@
 all: liblogger.a
 
-# rustc --crate-type=staticlib logger.rs util.rs -o liblogger.a
+libmailer.a: libs/libmailer/libmailer.go
+	cd libs/libmailer && make
 
-liblogger.a: util.o logger.rs
+# ar r liblogger.a util.o libs/libmailer/libmailer.a
+liblogger.a: util.o logger.rs libmailer.a
 	rustc --crate-type=staticlib logger.rs -o liblogger.a
-	ar r liblogger.a util.o
+	ar -M < merge.mri
 
 util.o: util.c
 	gcc -c util.c -DSTRING_IMPLEMENTATION -o util.o

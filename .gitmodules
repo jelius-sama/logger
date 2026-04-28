@@ -1,0 +1,3 @@
+[submodule "libs/libmailer"]
+	path = libs/libmailer
+	url = https://github.com/jelius-sama/libmailer.git

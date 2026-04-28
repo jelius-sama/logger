@@ -1,0 +1,5 @@
+open liblogger.a
+addmod util.o
+addlib libs/libmailer/libmailer.a
+save
+end
