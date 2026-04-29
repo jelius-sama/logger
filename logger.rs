@@ -2,7 +2,10 @@ use std::{
     ffi,
     fmt::Arguments,
     mem, process, ptr, slice, str,
-    sync::atomic::{AtomicPtr, Ordering},
+    sync::{
+        atomic::{AtomicPtr, Ordering},
+        Mutex,
+    },
     thread,
 };
 
@@ -77,6 +80,7 @@ pub struct LoggerConfig {
 }
 
 static CONFIG: AtomicPtr<LoggerConfig> = AtomicPtr::new(ptr::null_mut());
+static PENDING: Mutex<Vec<thread::JoinHandle<()>>> = Mutex::new(Vec::new());
 
 const COLOR_WARN: &str = "\x1b[33m";
 const COLOR_INFO: &str = "\x1b[0;36m";
@@ -229,7 +233,7 @@ unsafe fn handle_action(log_level: LogLevel) {
         None
     };
 
-    thread::spawn(move || {
+    let handle = thread::spawn(move || {
         match choice {
             Choice::ChoiceCallback => {
                 if let Some(f) = cb {
@@ -242,6 +246,15 @@ unsafe fn handle_action(log_level: LogLevel) {
             }
         }
     });
+
+    PENDING.lock().unwrap().push(handle);
+}
+
+fn drain_pending() {
+    let handles: Vec<_> = PENDING.lock().unwrap().drain(..).collect();
+    for h in handles {
+        h.join().unwrap();
+    }
 }
 
 unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style: Option<&str>) {
@@ -266,9 +279,6 @@ unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style
         };
     }
 
-    // TODO: Implement callbacks for log level greater than or equal to LogLevel::LError.
-    // Implement builtin callbacks for common functions such as sending mail after an error.
-    // Handle Panic to show trace logs for supported languages like golang.
     if log_level >= cfg.level {
         let slice = slice::from_raw_parts(msg.data as *const u8, msg.len as usize);
         if let Ok(message) = str::from_utf8(slice) {
@@ -284,6 +294,8 @@ unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style
                             message,
                             RESET,
                         );
+
+                        drain_pending();
                         process::exit(1);
                     }
                     logger!("{}[{}] {}{}", color, header, message, RESET);
@@ -299,6 +311,8 @@ unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style
                             message,
                             RESET,
                         );
+
+                        drain_pending();
                         process::exit(1);
                     }
                     logger!("{}{}: {}{}", color, header, message, RESET);
@@ -306,7 +320,9 @@ unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style
                 LogStyle::SNone => {
                     handle_action(log_level.clone());
                     if log_level >= LogLevel::LFatal {
-                        logger!("{}{}{}{}", color, style.unwrap(), message, RESET,);
+                        logger!("{}{}{}{}", color, style.unwrap(), message, RESET);
+
+                        drain_pending();
                         process::exit(1);
                     }
                     logger!("{}{}{}", color, message, RESET);

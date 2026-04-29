@@ -1,12 +1,12 @@
 #include <stdio.h>
 #define STRING_IMPLEMENTATION
 #include "logger.h"
-#include <unistd.h>
 
 void logger(void) {
   FILE *f = fopen("log.txt", "a");
   if (f == NULL)
     return;
+  printf("callback called\n");
   fprintf(f, "hello\n");
   fclose(f);
 }
@@ -23,7 +23,6 @@ int main(void) {
   Okay(msg);
   Warn(msg);
   Error(msg);
-  sleep(2);
   Fatal(msg);
   Panic(msg);
 
