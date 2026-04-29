@@ -25,6 +25,17 @@ typedef enum {
   ChoiceCallback = 1,
 } Choice;
 
+typedef enum {
+  MTMessage = 0,
+  MTLLevel = 1,
+} DefaultMailBodyTemplate;
+
+typedef struct {
+  char *str;
+  size_t len;
+  size_t count;
+} StrArr;
+
 // Inspired from: https://youtu.be/y8PLpDgZc0E?si=lQPnn4Nokze-aviu
 #ifdef STRING_IMPLEMENTATION
 #include <stdarg.h>
@@ -35,11 +46,12 @@ typedef struct {
 } String;
 
 typedef struct {
-  String body;
+  String *cfg_path;
+  String body_template;
   String title;
-  String **to;
-  String **cc;
-  String **bcc;
+  String to;
+  StrArr *cc;
+  StrArr *bcc;
 } DefaultMailAction;
 
 void free_string(String);
@@ -51,13 +63,15 @@ void Warn(const String msg);
 void Error(const String msg);
 void Fatal(const String msg);
 void Panic(const String msg);
+String MTTempl(const char *, ...);
 #else
 typedef struct {
-  _GoString_ body;
+  _GoString_ *cfg_path;
+  _GoString_ body_template;
   _GoString_ title;
-  _GoString_ **to;
-  _GoString_ **cc;
-  _GoString_ **bcc;
+  _GoString_ to;
+  StrArr *cc;
+  StrArr *bcc;
 } DefaultMailAction;
 
 void Info(const _GoString_ msg);
@@ -67,6 +81,7 @@ void Warn(const _GoString_ msg);
 void Error(const _GoString_ msg);
 void Fatal(const _GoString_ msg);
 void Panic(const _GoString_ msg);
+_GoString_ MTTempl(const char *, ...);
 #endif // STRING_IMPLEMENTATION
 
 typedef union {

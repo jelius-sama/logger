@@ -1,7 +1,7 @@
 use std::{
     ffi,
     fmt::Arguments,
-    mem, process, ptr, slice, str,
+    mem, process, ptr, slice, str, string,
     sync::{
         atomic::{AtomicPtr, Ordering},
         Mutex,
@@ -10,7 +10,7 @@ use std::{
 };
 
 #[repr(C)]
-#[derive(PartialEq, PartialOrd, Clone)]
+#[derive(PartialEq, PartialOrd)]
 pub enum LogLevel {
     LDebug = 0,
     LOkay = 1,
@@ -41,12 +41,19 @@ pub struct String {
 }
 
 #[repr(C)]
+pub enum DefaultMailBodyTemplate {
+    MTMessage = 0,
+    MTLLevel = 1,
+}
+
+#[repr(C)]
 pub struct DefaultMailAction {
-    pub body: String,
+    pub cfg_path: *mut String,
+    pub body_template: String,
     pub title: String,
-    pub to: *mut *mut String,
-    pub cc: *mut *mut String,
-    pub bcc: *mut *mut String,
+    pub to: String,
+    pub cc: *mut lib_mailer::StrArr,
+    pub bcc: *mut lib_mailer::StrArr,
 }
 
 #[repr(C)]
@@ -161,7 +168,47 @@ pub unsafe extern "C" fn Configure(level: LogLevel, style: LogStyle, action: *mu
     }
 }
 
-unsafe fn handle_action(log_level: LogLevel) {
+unsafe fn parse_template(template: &[u8], level_str: &str, msg: &[u8]) -> *mut ffi::c_char {
+    let template_str = str::from_utf8(template).unwrap_or("");
+
+    let bit_start = template_str
+        .rfind(|c: char| c != '0' && c != '1')
+        .map(|i| i + 1)
+        .unwrap_or(0);
+
+    let msg_str = str::from_utf8(msg).unwrap_or("");
+
+    let format_str = &template_str[..bit_start];
+    let bits: Vec<char> = template_str[bit_start..].chars().collect();
+
+    let mut result = string::String::new();
+    let mut bit_index = 0;
+    let mut chars = format_str.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            if let Some(&next) = chars.peek() {
+                if next == 's' {
+                    chars.next();
+                    if bits[bit_index] == '1' {
+                        result.push_str(level_str);
+                    } else {
+                        result.push_str(msg_str);
+                    }
+                    bit_index += 1;
+                    continue;
+                }
+            }
+        }
+        result.push(c);
+    }
+
+    // convert to null-terminated C string, caller is responsible for freeing
+    let c_str = ffi::CString::new(result).unwrap();
+    c_str.into_raw()
+}
+
+unsafe fn handle_action(log_level: &LogLevel, msg: &String) {
     let ptr = CONFIG.load(Ordering::Acquire);
     if ptr.is_null() {
         return;
@@ -225,29 +272,123 @@ unsafe fn handle_action(log_level: LogLevel) {
         return;
     }
 
-    // extract before spawn
     let choice = &(*action_item).choice;
-    let cb: Option<unsafe extern "C" fn()> = if matches!(choice, Choice::ChoiceCallback) {
-        Some((*action_item).action.callback)
-    } else {
-        None
-    };
 
-    let handle = thread::spawn(move || {
-        match choice {
-            Choice::ChoiceCallback => {
+    match choice {
+        Choice::ChoiceCallback => {
+            let cb: Option<unsafe extern "C" fn()> = if matches!(choice, Choice::ChoiceCallback) {
+                Some((*action_item).action.callback)
+            } else {
+                None
+            };
+
+            let handle = thread::spawn(move || {
                 if let Some(f) = cb {
                     f();
                 }
-            }
-            // NOTE: We need to get the msg for post processing action.
-            Choice::ChoiceMail => {
-                // TODO: copy mail fields into owned Strings before spawn
-            }
-        }
-    });
+            });
 
-    PENDING.lock().unwrap().push(handle);
+            PENDING.lock().unwrap().push(handle);
+        }
+        Choice::ChoiceMail => {
+            let msg_str = str::from_utf8(slice::from_raw_parts(
+                msg.data as *const u8,
+                msg.len as usize,
+            ))
+            .unwrap_or("")
+            .to_owned();
+
+            let body_str = str::from_utf8(slice::from_raw_parts(
+                (&(*action_item).action.send_mail).body_template.data as *const u8,
+                (&(*action_item).action.send_mail).body_template.len as usize,
+            ))
+            .unwrap_or("")
+            .to_owned();
+
+            let level_str = match log_level {
+                LogLevel::LDebug => "DEBUG",
+                LogLevel::LInfo => "INFO",
+                LogLevel::LOkay => "OKAY",
+                LogLevel::LWarn => "WARN",
+                LogLevel::LError => "ERROR",
+                LogLevel::LFatal => "FATAL",
+                LogLevel::LPanic => "PANIC",
+            }
+            .to_owned();
+
+            let cfg_path: Option<std::string::String> =
+                if (&(*action_item).action.send_mail).cfg_path.is_null() {
+                    None
+                } else {
+                    Some(
+                        str::from_utf8(slice::from_raw_parts(
+                            (*(&(*action_item).action.send_mail).cfg_path).data as *const u8,
+                            (*(&(*action_item).action.send_mail).cfg_path).len as usize,
+                        ))
+                        .unwrap_or("")
+                        .to_owned(),
+                    )
+                };
+
+            let to = str::from_utf8(slice::from_raw_parts(
+                (&(*action_item).action.send_mail).to.data as *const u8,
+                (&(*action_item).action.send_mail).to.len as usize,
+            ))
+            .unwrap_or("")
+            .to_owned();
+
+            let title = str::from_utf8(slice::from_raw_parts(
+                (&(*action_item).action.send_mail).title.data as *const u8,
+                (&(*action_item).action.send_mail).title.len as usize,
+            ))
+            .unwrap_or("")
+            .to_owned();
+
+            let cc = (&(*action_item).action.send_mail).cc as usize;
+            let bcc = (&(*action_item).action.send_mail).bcc as usize;
+
+            let handle = thread::spawn(move || {
+                let body = parse_template(body_str.as_bytes(), &level_str, msg_str.as_bytes());
+                let mut cfg: *mut lib_mailer::MailerConfig = ptr::null_mut();
+                let mut err: *mut ffi::c_char = ptr::null_mut();
+
+                let to_c = ffi::CString::new(to).unwrap();
+                let title_c = ffi::CString::new(title).unwrap();
+
+                if let Some(path) = cfg_path {
+                    lib_mailer::LoadConfigFromPath(
+                        ffi::CString::new(path).unwrap().as_ptr(),
+                        &mut cfg,
+                        &mut err,
+                    );
+                } else {
+                    lib_mailer::LoadConfig(&mut cfg, &mut err);
+                }
+
+                let cc_ptr = cc as *mut lib_mailer::StrArr;
+                let bcc_ptr = bcc as *mut lib_mailer::StrArr;
+
+                lib_mailer::SendMail(
+                    (*cfg).host,
+                    (*cfg).port,
+                    (*cfg).username,
+                    (*cfg).password,
+                    (*cfg).from,
+                    to_c.as_ptr(),
+                    title_c.as_ptr(),
+                    body,
+                    cc_ptr,
+                    bcc_ptr,
+                    ptr::null_mut(), // TODO: Support attachments in future
+                    &mut err,
+                );
+
+                lib_mailer::FreeCString(body as *mut ffi::c_char);
+            });
+
+            PENDING.lock().unwrap().push(handle);
+        }
+    }
 }
 
 fn drain_pending() {
@@ -284,7 +425,7 @@ unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style
         if let Ok(message) = str::from_utf8(slice) {
             match cfg.style {
                 LogStyle::SBrackets => {
-                    handle_action(log_level.clone());
+                    handle_action(&log_level, &msg);
                     if log_level >= LogLevel::LFatal {
                         logger!(
                             "{}{}[{}] {}{}",
@@ -301,7 +442,7 @@ unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style
                     logger!("{}[{}] {}{}", color, header, message, RESET);
                 }
                 LogStyle::SColon => {
-                    handle_action(log_level.clone());
+                    handle_action(&log_level, &msg);
                     if log_level >= LogLevel::LFatal {
                         logger!(
                             "{}{}{}: {}{}",
@@ -318,7 +459,7 @@ unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style
                     logger!("{}{}: {}{}", color, header, message, RESET);
                 }
                 LogStyle::SNone => {
-                    handle_action(log_level.clone());
+                    handle_action(&log_level, &msg);
                     if log_level >= LogLevel::LFatal {
                         logger!("{}{}{}{}", color, style.unwrap(), message, RESET);
 
