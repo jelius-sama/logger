@@ -1,16 +1,17 @@
 use std::{
     ffi,
     fmt::Arguments,
-    process, ptr, slice, str,
+    mem, process, ptr, slice, str,
     sync::atomic::{AtomicPtr, Ordering},
+    thread,
 };
 
 #[repr(C)]
-#[derive(PartialEq, PartialOrd)]
+#[derive(PartialEq, PartialOrd, Clone)]
 pub enum LogLevel {
     LDebug = 0,
-    LInfo = 1,
-    LOkay = 2,
+    LOkay = 1,
+    LInfo = 2,
     LWarn = 3,
     LError = 4,
     LFatal = 5,
@@ -19,21 +20,60 @@ pub enum LogLevel {
 
 #[repr(C)]
 pub enum LogStyle {
-    SBrackets,
-    SColon,
-    SNone,
+    SBrackets = 0,
+    SColon = 1,
+    SNone = 2,
 }
 
 #[repr(C)]
-pub struct LoggerConfig {
-    pub level: LogLevel,
-    pub style: LogStyle,
+pub enum Choice {
+    ChoiceMail = 0,
+    ChoiceCallback = 1,
 }
 
 #[repr(C)]
 pub struct String {
     pub data: *const ffi::c_char,
     pub len: i64,
+}
+
+#[repr(C)]
+pub struct DefaultMailAction {
+    pub body: String,
+    pub title: String,
+    pub to: *mut *mut String,
+    pub cc: *mut *mut String,
+    pub bcc: *mut *mut String,
+}
+
+#[repr(C)]
+pub union ActionChoice {
+    pub callback: unsafe extern "C" fn(),
+    pub send_mail: mem::ManuallyDrop<DefaultMailAction>,
+}
+
+#[repr(C)]
+pub struct ActionItem {
+    pub choice: Choice,
+    pub action: ActionChoice,
+}
+
+#[repr(C)]
+pub struct Action {
+    pub on_debug: *mut ActionItem,
+    pub on_okay: *mut ActionItem,
+    pub on_info: *mut ActionItem,
+    pub on_warn: *mut ActionItem,
+    pub on_error: *mut ActionItem,
+    pub on_panic: *mut ActionItem,
+    pub on_fatal: *mut ActionItem,
+}
+
+#[repr(C)]
+pub struct LoggerConfig {
+    pub level: LogLevel,
+    pub style: LogStyle,
+    pub action: *mut Action,
 }
 
 static CONFIG: AtomicPtr<LoggerConfig> = AtomicPtr::new(ptr::null_mut());
@@ -83,14 +123,6 @@ pub mod lib_mailer {
 
         pub fn FreeMailerConfig(cfg: *mut MailerConfig);
 
-        pub fn ParseEmailAddress(
-            addr: *const c_char,
-            out_parsed: *mut *mut c_char,
-            out_error: *mut *mut c_char,
-        ) -> c_int;
-
-        pub fn FormatEmailAddress(addr: *const c_char, out_formatted: *mut *mut c_char);
-
         pub fn SendMail(
             smtp_host: *const c_char,
             smtp_port: c_int,
@@ -107,27 +139,109 @@ pub mod lib_mailer {
         ) -> c_int;
 
         pub fn FreeStrArr(arr: *mut StrArr);
-
-        pub fn SendRawEML(
-            smtp_host: *const c_char,
-            smtp_port: c_int,
-            username: *const c_char,
-            password: *const c_char,
-            eml_path: *const c_char,
-            out_error: *mut *mut c_char,
-        ) -> c_int;
     }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn Configure(level: LogLevel, style: LogStyle) {
-    let new_config = Box::into_raw(Box::new(LoggerConfig { level, style }));
+pub unsafe extern "C" fn Configure(level: LogLevel, style: LogStyle, action: *mut Action) {
+    let new_config = Box::into_raw(Box::new(LoggerConfig {
+        level,
+        style,
+        action,
+    }));
 
     let old_ptr = CONFIG.swap(new_config, Ordering::SeqCst);
 
     if !old_ptr.is_null() {
         drop(Box::from_raw(old_ptr));
     }
+}
+
+unsafe fn handle_action(log_level: LogLevel) {
+    let ptr = CONFIG.load(Ordering::Acquire);
+    if ptr.is_null() {
+        return;
+    }
+
+    let cfg = &*ptr;
+
+    let action_item: *const ActionItem = match log_level {
+        LogLevel::LDebug => {
+            if !cfg.action.is_null() {
+                (*cfg.action).on_debug
+            } else {
+                ptr::null()
+            }
+        }
+        LogLevel::LInfo => {
+            if !cfg.action.is_null() {
+                (*cfg.action).on_info
+            } else {
+                ptr::null()
+            }
+        }
+        LogLevel::LOkay => {
+            if !cfg.action.is_null() {
+                (*cfg.action).on_okay
+            } else {
+                ptr::null()
+            }
+        }
+        LogLevel::LWarn => {
+            if !cfg.action.is_null() {
+                (*cfg.action).on_warn
+            } else {
+                ptr::null()
+            }
+        }
+        LogLevel::LError => {
+            if !cfg.action.is_null() {
+                (*cfg.action).on_error
+            } else {
+                ptr::null()
+            }
+        }
+        LogLevel::LFatal => {
+            if !cfg.action.is_null() {
+                (*cfg.action).on_fatal
+            } else {
+                ptr::null()
+            }
+        }
+        LogLevel::LPanic => {
+            if !cfg.action.is_null() {
+                (*cfg.action).on_panic
+            } else {
+                ptr::null()
+            }
+        }
+    };
+
+    if action_item.is_null() {
+        return;
+    }
+
+    // extract before spawn
+    let choice = &(*action_item).choice;
+    let cb: Option<unsafe extern "C" fn()> = if matches!(choice, Choice::ChoiceCallback) {
+        Some((*action_item).action.callback)
+    } else {
+        None
+    };
+
+    thread::spawn(move || {
+        match choice {
+            Choice::ChoiceCallback => {
+                if let Some(f) = cb {
+                    f();
+                }
+            }
+            // NOTE: We need to get the msg for post processing action.
+            Choice::ChoiceMail => {
+                // TODO: copy mail fields into owned Strings before spawn
+            }
+        }
+    });
 }
 
 unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style: Option<&str>) {
@@ -160,6 +274,7 @@ unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style
         if let Ok(message) = str::from_utf8(slice) {
             match cfg.style {
                 LogStyle::SBrackets => {
+                    handle_action(log_level.clone());
                     if log_level >= LogLevel::LFatal {
                         logger!(
                             "{}{}[{}] {}{}",
@@ -174,6 +289,7 @@ unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style
                     logger!("{}[{}] {}{}", color, header, message, RESET);
                 }
                 LogStyle::SColon => {
+                    handle_action(log_level.clone());
                     if log_level >= LogLevel::LFatal {
                         logger!(
                             "{}{}{}: {}{}",
@@ -188,6 +304,7 @@ unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style
                     logger!("{}{}: {}{}", color, header, message, RESET);
                 }
                 LogStyle::SNone => {
+                    handle_action(log_level.clone());
                     if log_level >= LogLevel::LFatal {
                         logger!("{}{}{}{}", color, style.unwrap(), message, RESET,);
                         process::exit(1);

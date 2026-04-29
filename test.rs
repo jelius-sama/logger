@@ -4,8 +4,8 @@ use std::{os::raw::c_char, string};
 #[derive(PartialEq, PartialOrd)]
 pub enum LogLevel {
     LDebug = 0,
-    LInfo = 1,
-    LOkay = 2,
+    LOkay = 1,
+    LInfo = 2,
     LWarn = 3,
     LError = 4,
     LFatal = 5,
