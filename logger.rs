@@ -352,15 +352,13 @@ unsafe fn handle_action(log_level: &LogLevel, msg: &String) {
                 let mut cfg: *mut lib_mailer::MailerConfig = ptr::null_mut();
                 let mut err: *mut ffi::c_char = ptr::null_mut();
 
-                let to_c = ffi::CString::new(to).unwrap();
-                let title_c = ffi::CString::new(title).unwrap();
+                let to_c = ffi::CString::new(to).unwrap().into_raw();
+                let title_c = ffi::CString::new(title).unwrap().into_raw();
 
                 if let Some(path) = cfg_path {
-                    lib_mailer::LoadConfigFromPath(
-                        ffi::CString::new(path).unwrap().as_ptr(),
-                        &mut cfg,
-                        &mut err,
-                    );
+                    let path_c = ffi::CString::new(path).unwrap().into_raw();
+                    lib_mailer::LoadConfigFromPath(path_c, &mut cfg, &mut err);
+                    drop(ffi::CString::from_raw(path_c));
                 } else {
                     lib_mailer::LoadConfig(&mut cfg, &mut err);
                 }
@@ -374,8 +372,8 @@ unsafe fn handle_action(log_level: &LogLevel, msg: &String) {
                     (*cfg).username,
                     (*cfg).password,
                     (*cfg).from,
-                    to_c.as_ptr(),
-                    title_c.as_ptr(),
+                    to_c,
+                    title_c,
                     body,
                     cc_ptr,
                     bcc_ptr,
@@ -383,6 +381,8 @@ unsafe fn handle_action(log_level: &LogLevel, msg: &String) {
                     &mut err,
                 );
 
+                drop(ffi::CString::from_raw(to_c));
+                drop(ffi::CString::from_raw(title_c));
                 lib_mailer::FreeCString(body as *mut ffi::c_char);
             });
 

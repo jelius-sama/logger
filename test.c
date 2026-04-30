@@ -17,8 +17,7 @@ int main(void) {
   String msg = string("Addition result: %d", 210 + 210);
 
   char **cc_array = malloc(2 * sizeof(char *));
-  cc_array[0] = strdup("jelius.basumatary.sama@gmail.com");
-  cc_array[1] = strdup("work@jelius.dev");
+  cc_array[0] = strdup("work@jelius.dev");
 
   StrArr *cc = malloc(sizeof(StrArr));
   cc->str = (char *)cc_array;
@@ -31,7 +30,7 @@ int main(void) {
           MTTempl("An error occurred.\n\tLevel: %s\n\t%s logs: %s\n", MTLLevel,
                   MTLLevel, MTMessage, -1),
       .title = string("Error Alert"),
-      .to = string("personal@jelius.dev"),
+      .to = string("contact@jelius.dev"),
       .cc = cc,
       .bcc = NULL,
   };
