@@ -4,7 +4,7 @@ libmailer.a: libs/libmailer/libmailer.go
 	cd libs/libmailer && make
 
 liblogger.a: util.o logger.rs libmailer.a
-	rustc -A improper_ctypes_definitions --crate-type=staticlib logger.rs -o liblogger.a
+	rustc -O -C lto -C strip=symbols -C codegen-units=1 -A improper_ctypes_definitions --crate-type=staticlib logger.rs -o liblogger.a
 	ar -M < merge.mri
 
 util.o: util.c
