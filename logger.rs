@@ -366,6 +366,11 @@ unsafe fn handle_action(log_level: &LogLevel, msg: &String) {
                 let cc_ptr = cc as *mut lib_mailer::StrArr;
                 let bcc_ptr = bcc as *mut lib_mailer::StrArr;
 
+                // TODO: Create a stack of queues, each item/queue in the stack will run in parallel,
+                // each queue will execute sequentially sending mails one by one in FIFO order.
+                // Stack should likely be configurable depending on use case like high volume
+                // applications may use more number of queues and others may limit it to the
+                // threads available in the system.
                 lib_mailer::SendMail(
                     (*cfg).host,
                     (*cfg).port,
@@ -407,7 +412,10 @@ unsafe fn log(log_level: LogLevel, header: &str, msg: String, color: &str, style
     let cfg = &*ptr;
 
     let logger_fn = |args: Arguments| {
-        if log_level >= LogLevel::LWarn {
+        if log_level == LogLevel::LPanic {
+            // TODO: Handle panic with special care
+            eprintln!("{}", args);
+        } else if log_level >= LogLevel::LWarn {
             eprintln!("{}", args);
         } else {
             println!("{}", args);

@@ -47,6 +47,7 @@ fn string(s: string::String) -> String {
     return String { data: ptr, len };
 }
 
+// TODO: Update to API required for tests to compile
 fn main() {
     let msg = string(format!("Addition result: {}", 34 + 35));
 

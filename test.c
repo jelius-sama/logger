@@ -4,15 +4,6 @@
 #define STRING_IMPLEMENTATION
 #include "logger.h"
 
-void logger(void) {
-  FILE *f = fopen("log.txt", "a");
-  if (f == NULL)
-    return;
-  printf("callback called\n");
-  fprintf(f, "hello\n");
-  fclose(f);
-}
-
 int main(void) {
   String msg = string("Addition result: %d", 210 + 210);
 
